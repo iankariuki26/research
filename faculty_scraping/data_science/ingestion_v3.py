@@ -1,7 +1,6 @@
 import duckdb
 import requests
 from bs4 import BeautifulSoup
-from itertools import chain
 import string
 import pandas as pd
 
