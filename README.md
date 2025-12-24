@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/uva_logo.png" alt="University of Virginia logo" width="180"/>
+  <img src="images/uva_logo.png" alt="University of Virginia logo" width="500"/>
 </p>
 
 
