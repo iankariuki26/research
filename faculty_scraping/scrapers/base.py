@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import requests
 from urllib.parse import urljoin
+from playwright.sync_api import sync_playwright
 
 
 
@@ -81,17 +82,30 @@ class FacultyScraper(ABC):
 
     def fetch_page(self,url:str) -> str:
         """
-        Fetches a page and returns raw HTML
+        Fetches a page and returns raw HTML. If page protected from bots by cloudflare, the method would 
+        change from utilizing requests to the playwright package method which mimics a real browser and user.
 
         """
+        try:
+            #http request
+            r = self.session.get(url, timeout = 10)
+            #raises error if http response fails
+            r.raise_for_status()
 
-        #http request
-        r = self.session.get(url, timeout = 10)
-        #raises error if http response fails
-        r.raise_for_status()
+            if self._is_cloudflare_block(r.text):
+                raise RuntimeError("Cloudflare challenge detected")
 
-        self.pages_fetched += 1
-        return r.text
+            self.pages_fetched += 1
+            return r.text
+        
+        except Exception as e:
+            print(f"[fetch_page] falling back to browser scrape through playwright for {url} ({e})")
+
+            html = self._playwright_page_scraper(url)
+            self.pages_fetched += 1
+            return html
+    
+
 
 
 
@@ -178,10 +192,45 @@ class FacultyScraper(ABC):
     
 
 
+###------------------------------------------------------------------------------------------------###
 
-        
+    ### helper functions
+
+###------------------------------------------------------------------------------------------------###
+    
+
+    def _is_cloudflare_block(self, response_text: str) -> bool:
+        """
+        this is a helper function for the get_pages function. This checks to see if there is a cloudflare block 
+        on the website when we are trying to scrape html through the requests package. The Computer Science department
+        for example blocks http clients through cloudflare to prevent bots. If the response_text contains
+        cloudflare response of "just a moment" or "cloudflare" then it will return true and utilize another scraping method
+        specifically playwright which launches a real browser, runs javascript, and passes bot checks, although I must 
+        keep in mind that is is slower and more computationally expensive, so always starting of with a .requests.
+        """
+        return (
+            "Just a moment" in response_text or "cloudflare" in response_text.lower()
+        )
+
+    def _playwright_page_scraper(self, url: str) -> str:
+        """
+        This is the playwright scraper which utilizes real browser and mimics real user bypassing cloudflare restrictions
+        """
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            page = browser.new_page()
+
+            page.goto(url, wait_until="domcontentloaded", timeout = 60000)
+            page.wait_for_timeout(3000)
+
+            html = page.content()
+            browser.close()
+
+            return html
         
 
-            
+
+
+                
 
 
