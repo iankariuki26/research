@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="assets/uva_logo.png" alt="University of Virginia logo" width="180"/>
+</p>
+
+
 
 # Research
 
