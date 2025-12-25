@@ -43,6 +43,8 @@ class FacultyScraper(ABC):
         # Run-level counters for observability and metrics
         self.parse_failures = 0
         self.pages_fetched = 0
+        self.http_fetches = 0
+        self.browser_fetched = 0
 
 
 
@@ -80,10 +82,10 @@ class FacultyScraper(ABC):
 
     ###------------------------------------------------------------------------------------------------###
 
-    def fetch_page(self,url:str) -> str:
+    def fetch_page(self,url:str) -> tuple[str,str]:
         """
-        Fetches a page and returns raw HTML. If page protected from bots by cloudflare, the method would 
-        change from utilizing requests to the playwright package method which mimics a real browser and user.
+        Fetches a page and returns raw HTML and the fetching method. 
+        Tries requests first, falls back to Playwright if Cloudflare blocks.
 
         """
         try:
@@ -95,15 +97,17 @@ class FacultyScraper(ABC):
             if self._is_cloudflare_block(r.text):
                 raise RuntimeError("Cloudflare challenge detected")
 
+            self.http_fetches += 1
             self.pages_fetched += 1
-            return r.text
+            return r.text, "http"
         
-        except Exception as e:
+        except (requests.HTTPError, requests.Timeout, RuntimeError) as e:
             print(f"[fetch_page] falling back to browser scrape through playwright for {url} ({e})")
 
             html = self._playwright_page_scraper(url)
             self.pages_fetched += 1
-            return html
+            self.browser_fetches += 1
+            return html, "browser"
     
 
 
@@ -123,13 +127,14 @@ class FacultyScraper(ABC):
 
         for url in self.get_faculty_links():
             try:
-                html = self.fetch_page(url)
+                html, fetch_method = self.fetch_page(url)
 
                 #this is the raw capture which will be appended to
                 raw_pages.append({
                     "department" : self.department,
                     "url" : url,
                     "html" : html,
+                    "fetch_method": fetch_method,
                     "scraped_at" : datetime.now(timezone.utc)
                 })
 

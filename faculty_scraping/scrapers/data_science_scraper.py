@@ -39,8 +39,8 @@ class DataScienceScraper(FacultyScraper):
 
             url = self.DIRECTORY_URL + letter
 
-            #html of faculty listing, inherited from FacultyScraper
-            html = self.fetch_page(url)
+            #html of faculty listing, inherited from FacultyScraper, ignoring tuple value (html, fetch_method <-ignored)
+            html, _ = self.fetch_page(url)
             
             
             soup = BeautifulSoup(html, "html.parser")
@@ -68,7 +68,7 @@ class DataScienceScraper(FacultyScraper):
         soup = BeautifulSoup(html, "html.parser")
 
 
-        #the name of the faculty is consistenly stored in the <h1> tag
+        #the name of the faculty is consistently stored in the <h1> tag
         name_tag = soup.find("h1")
         name = " ".join(name_tag.stripped_strings) if name_tag else None
 

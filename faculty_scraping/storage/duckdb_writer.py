@@ -30,6 +30,7 @@ class DuckDBWriter:
                 department TEXT,
                 url TEXT,
                 html TEXT,
+                fetch_method TEXT, 
                 scraped_at TIMESTAMP
                 )
 
@@ -74,11 +75,11 @@ class DuckDBWriter:
             """
 
             self.con.executemany("""
-            INSERT INTO faculty_raw_pages (department, url, html, scraped_at)
-            VALUES (?,?,?,?) """, 
+            INSERT INTO faculty_raw_pages (department, url, html, fetch_method, scraped_at)
+            VALUES (?,?,?,?,?) """, 
             
             
-            [ (p["department"], p["url"], p["html"], p["scraped_at"]) for p in raw_pages ])
+            [ (p["department"], p["url"], p["html"],p["fetch_method"], p["scraped_at"]) for p in raw_pages ])
 
     def insert_records(self, records: list[dict]):
             """
