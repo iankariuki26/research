@@ -206,7 +206,7 @@ class FacultyScraper(ABC):
 
 ###------------------------------------------------------------------------------------------------###
 
-    ### Playwright Functions for browser scraping
+    ### Playwright Functions for browser scraping, utilizing async as well
 
 ###------------------------------------------------------------------------------------------------###
     
@@ -256,7 +256,7 @@ class FacultyScraper(ABC):
         if self._browser is None:
             print("[playwright] launching browser")
             self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(headless=True)
+            self._browser = await self._playwright.chromium.launch(headless=False)
         return self._browser
     
 

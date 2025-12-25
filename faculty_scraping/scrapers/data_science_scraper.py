@@ -25,7 +25,7 @@ class DataScienceScraper(FacultyScraper):
 
 
 
-    def get_faculty_links(self) -> list[str]:
+    async def get_faculty_links(self) -> list[str]:
         """
         Returns a sorted list of all Data Science faculty profile URLs by iterating
         through the A-Z directory pages
@@ -40,7 +40,7 @@ class DataScienceScraper(FacultyScraper):
             url = self.DIRECTORY_URL + letter
 
             #html of faculty listing, inherited from FacultyScraper, ignoring tuple value (html, fetch_method <-ignored)
-            html, _ = self.fetch_page(url)
+            html, _ = await self.fetch_page(url)
             
             
             soup = BeautifulSoup(html, "html.parser")
