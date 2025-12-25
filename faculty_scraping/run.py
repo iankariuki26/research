@@ -1,12 +1,13 @@
 from scrapers.data_science_scraper import DataScienceScraper
+from scrapers.computer_science_scraper import ComputerScience_Scraper
 from storage.duckdb_writer import DuckDBWriter
 from metrics.run_metrics import compute_run_stats
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import asyncio
 
 
-
-def main():
+async def main():
 
     """
     runs the end to end scrape job
@@ -15,8 +16,9 @@ def main():
     eastern_timezone = ZoneInfo("America/New_York")
     started_at = datetime.now(eastern_timezone)
 
-    scraper = DataScienceScraper()
-    raw_pages, records = scraper.scrape()
+    # scraper = DataScienceScraper()
+    scraper = ComputerScience_Scraper()
+    raw_pages, records = await scraper.scrape()
 
     print(f"Scraped {len(records)} records")
     print(f"Pages Fetched: {scraper.pages_fetched}")
@@ -35,4 +37,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

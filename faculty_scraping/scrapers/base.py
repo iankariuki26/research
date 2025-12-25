@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import requests
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
+import asyncio
 
 
 
@@ -28,7 +29,7 @@ class FacultyScraper(ABC):
 
 
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         #only uses a single consistent HTTP session instead of a new one for every page
         #mimics real user to prevent scraping blocking risk
         self.session = requests.Session()
@@ -39,6 +40,9 @@ class FacultyScraper(ABC):
                 "Chrome/120.0.0.0 Safari/537.36"
             )
         })
+
+        self._playwright = None
+        self._browser = None
 
         # Run-level counters for observability and metrics
         self.parse_failures = 0
@@ -57,7 +61,7 @@ class FacultyScraper(ABC):
 
 
     @abstractmethod
-    def get_faculty_links(self) -> list[str]:
+    async def get_faculty_links(self) -> list[str]:
         """
         Returns all the faculty profile URLs for a department
         
@@ -82,7 +86,7 @@ class FacultyScraper(ABC):
 
     ###------------------------------------------------------------------------------------------------###
 
-    def fetch_page(self,url:str) -> tuple[str,str]:
+    async def fetch_page(self,url:str) -> tuple[str,str]:
         """
         Fetches a page and returns raw HTML and the fetching method. 
         Tries requests first, falls back to Playwright if Cloudflare blocks.
@@ -104,9 +108,9 @@ class FacultyScraper(ABC):
         except (requests.HTTPError, requests.Timeout, RuntimeError) as e:
             print(f"[fetch_page] falling back to browser scrape through playwright for {url} ({e})")
 
-            html = self._playwright_page_scraper(url)
+            html = await self._playwright_page_scraper(url)
             self.pages_fetched += 1
-            self.browser_fetches += 1
+            self.browser_fetched += 1
             return html, "browser"
     
 
@@ -114,41 +118,44 @@ class FacultyScraper(ABC):
 
 
 
-    def scrape(self) -> tuple[list[dict], list[dict]]:
+    async def scrape(self) -> tuple[list[dict], list[dict]]:
         """This executes the scraping workflow
         
         Returns :
             raw_pages: lossless HTML Captures for reproducibility 
             records: normalized faculty records 
         """
+        try:
+            raw_pages = []
+            records = []
 
-        raw_pages = []
-        records = []
+            for url in await self.get_faculty_links():
+                try:
+                    html, fetch_method = await self.fetch_page(url)
 
-        for url in self.get_faculty_links():
-            try:
-                html, fetch_method = self.fetch_page(url)
+                    #this is the raw capture which will be appended to
+                    raw_pages.append({
+                        "department" : self.department,
+                        "url" : url,
+                        "html" : html,
+                        "fetch_method": fetch_method,
+                        "scraped_at" : datetime.now(timezone.utc)
+                    })
 
-                #this is the raw capture which will be appended to
-                raw_pages.append({
-                    "department" : self.department,
-                    "url" : url,
-                    "html" : html,
-                    "fetch_method": fetch_method,
-                    "scraped_at" : datetime.now(timezone.utc)
-                })
+                    #this is the normalized extraction
+                    record = self.parse_faculty_page(html, url)
+    
+                    record["department"] = self.department
+                    record["webpage_link"] = url
+                    records.append(self._normalize(record))
 
-                #this is the normalized extraction
-                record = self.parse_faculty_page(html, url)
- 
-                record["department"] = self.department
-                record["webpage_link"] = url
-                records.append(self._normalize(record))
+                
+                except Exception as e:
+                    self.parse_failures += 1
+                    print(f"[{self.department}] parse failure on {url}: {e}")
 
-            
-            except Exception as e:
-                self.parse_failures += 1
-                print(f"[{self.department}] parse failure on {url}: {e}")
+        finally:
+            await self.close()
 
         return raw_pages, records
 
@@ -199,7 +206,7 @@ class FacultyScraper(ABC):
 
 ###------------------------------------------------------------------------------------------------###
 
-    ### helper functions
+    ### Playwright Functions for browser scraping
 
 ###------------------------------------------------------------------------------------------------###
     
@@ -217,21 +224,55 @@ class FacultyScraper(ABC):
             "Just a moment" in response_text or "cloudflare" in response_text.lower()
         )
 
-    def _playwright_page_scraper(self, url: str) -> str:
+
+
+
+
+
+
+    async def _playwright_page_scraper(self, url: str) -> str:
         """
         This is the playwright scraper which utilizes real browser and mimics real user bypassing cloudflare restrictions
         """
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            page = browser.new_page()
+        
+        browser = await self._get_browser()
+        page = await browser.new_page()
 
-            page.goto(url, wait_until="domcontentloaded", timeout = 60000)
-            page.wait_for_timeout(3000)
+        await page.goto(url, wait_until="domcontentloaded", timeout = 60000)
+        if "/faculty/" in url:
+            await page.wait_for_selector("h1.page_title", timeout=10000)
 
-            html = page.content()
-            browser.close()
+        html = await page.content()
+        await page.close()
 
-            return html
+        return html
+    
+
+
+
+
+
+    async def _get_browser(self):
+        if self._browser is None:
+            print("[playwright] launching browser")
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.launch(headless=True)
+        return self._browser
+    
+
+
+
+
+    async def close(self):
+        if self._browser:
+            await self._browser.close()
+            self._browser = None
+
+        if self._playwright:    
+            await self._playwright.stop()
+            self._playwright = None
+
+        
         
 
 

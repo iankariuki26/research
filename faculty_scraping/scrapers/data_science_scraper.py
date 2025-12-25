@@ -81,9 +81,12 @@ class DataScienceScraper(FacultyScraper):
 
         #pulls the expertise text
         expertise_tags = soup.find_all("div", class_="list-text")
+        expertise = ([t.get_text(strip=True) for t in expertise_tags] if expertise_tags else None)
 
         #pulls the email, the person section allows for only the person field to be considered, not the links and info at the bottom
         email_link = soup.select_one("section.person a[href^='mailto:']")
+        email = (email_link["href"].replace("mailto:", "") if email_link else None)
+
     
 
         #Normalizing the fields into a clean dictionary, missing fields stored as none
@@ -91,14 +94,8 @@ class DataScienceScraper(FacultyScraper):
             "name": name,
             "title": title,
             "bio": bio,
-            "expertise": (
-                [t.get_text(strip=True) for t in expertise_tags]
-                if expertise_tags else None
-            ),
-            "email": (
-                email_link["href"].replace("mailto:", "")
-                if email_link else None
-            ),
+            "expertise": expertise,
+            "email": email,
         }
         
         return info
