@@ -20,8 +20,8 @@ async def main():
 
     
     # scraper = DataScienceScraper()
-    #SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper()]
-    SCRAPERS = [PsychologyScraper()]
+    SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper()]
+  
 
 
     for i in SCRAPERS:

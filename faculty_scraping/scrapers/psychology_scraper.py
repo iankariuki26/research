@@ -16,8 +16,13 @@ class PsychologyScraper(FacultyScraper):
 
     department = "Psychology"
 
+    #directory page url with all the faculty pages
     DIRECTORY_URL = "https://psychology.as.virginia.edu/faculty"
+
+    #each faculty url begins with this base url
     BASE_URL = "https://psychology.as.virginia.edu"
+
+
 
     async def get_faculty_links(self):
         """
@@ -27,10 +32,12 @@ class PsychologyScraper(FacultyScraper):
 
         url = self.DIRECTORY_URL
 
+
+        #prevents duplicates across directory pages
         links = set() 
 
 
-
+        #html of faculty listing, inherited from FacultyScraper, ignoring tuple value (html, fetch_method <-ignored)
         html, _ = await self.fetch_page(url)
 
         soup = BeautifulSoup(html, "html.parser")
@@ -57,16 +64,21 @@ class PsychologyScraper(FacultyScraper):
             A dictionary with all the normalized faculty fields
         """
 
+
         soup = BeautifulSoup(html, "html.parser")
 
+
+        #scraping the faculty name of faculty
         article = soup.find("article", class_="container")
         name_tag = article.find("h1") if article else None
         name = name_tag.get_text(strip=True) if name_tag else None
 
+        #scraping academic titles of faculty
         title_tags = soup.find_all("div", class_="field-field_title")
         titles = [tag.get_text(strip=True) for tag in title_tags]
         title = "; ".join(titles) if titles else None
 
+        #scraping biographies of faculty
         body = soup.find("div", class_="field-body")
         bio = None
         if body:
@@ -76,17 +88,17 @@ class PsychologyScraper(FacultyScraper):
                 bio = p.get_text(" ", strip=True) if p else None
                 
 
-        area_tags = soup.find_all("a", href=lambda h: h and h.startswith("/taxonomy/term/"))
 
+        #this large portion scrapes the varying types of expertise within the faculty page
+        area_tags = soup.find_all("a", href=lambda h: h and h.startswith("/taxonomy/term/"))
         expertise = ( [tag.get_text(strip=True) for tag in area_tags] if area_tags else [] )
 
         #some of the faculty have a research focus portion separate from their research area,
         #this will add the focus to the expertise if exists
-        focus = soup.find("div", class_="field-body")
-        if focus:
+        if body:
 
             #for research focus header
-            focus_header = focus.find("h3", string="Research Focus")
+            focus_header = body.find("h3", string="Research Focus")
             if focus_header:
                 focus_p = focus_header.find_next_sibling("p")
                 if focus_p:
@@ -101,10 +113,8 @@ class PsychologyScraper(FacultyScraper):
 
         expertise = expertise if expertise else None
 
-        expertise = expertise if expertise else None
 
-
-
+        #scrapes the email of the faculty member
         email_link = soup.select_one("a[href^='mailto:']")
         email = email_link.get_text(strip=True) if email_link else None
 

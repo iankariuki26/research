@@ -44,7 +44,7 @@ class FacultyScraper(ABC):
         self._playwright = None
         self._browser = None
 
-        # Run-level counters for observability and metrics
+        # metrics
         self.parse_failures = 0
         self.pages_fetched = 0
         self.http_fetches = 0
@@ -58,6 +58,7 @@ class FacultyScraper(ABC):
     ### Below this is the required interface for all department scrapers
 
     ###------------------------------------------------------------------------------------------------###
+
 
 
     @abstractmethod
@@ -80,11 +81,16 @@ class FacultyScraper(ABC):
         pass
 
 
+
+
+
     ###------------------------------------------------------------------------------------------------###
 
     ### Below this is the shared workflow (which will NOT be overridden in the subclasses )
 
     ###------------------------------------------------------------------------------------------------###
+
+
 
     async def fetch_page(self,url:str) -> tuple[str,str]:
         """
@@ -98,16 +104,22 @@ class FacultyScraper(ABC):
             #raises error if http response fails
             r.raise_for_status()
 
+            #checks to see if cloudflare blocks scraping through bot test
             if self._is_cloudflare_block(r.text):
                 raise RuntimeError("Cloudflare challenge detected")
 
+            #if scrape successful
             self.http_fetches += 1
             self.pages_fetched += 1
+
+            #returns the raw html and our fetch method, http since successful
             return r.text, "http"
         
+
         except (requests.HTTPError, requests.Timeout, RuntimeError) as e:
             print(f"[fetch_page] falling back to browser scrape through playwright for {url} ({e})")
 
+            #using real browser to load page and get the html
             html = await self._playwright_page_scraper(url)
             self.pages_fetched += 1
             self.browser_fetched += 1
@@ -129,6 +141,7 @@ class FacultyScraper(ABC):
             raw_pages = []
             records = []
 
+            #goes through every faculty link for a department
             for url in await self.get_faculty_links():
                 try:
                     html, fetch_method = await self.fetch_page(url)
@@ -142,9 +155,10 @@ class FacultyScraper(ABC):
                         "scraped_at" : datetime.now(timezone.utc)
                     })
 
-                    #this is the normalized extraction
+                    #this is the normalized extraction with most of the faculty information
                     record = self.parse_faculty_page(html, url)
-    
+
+                    #adding department and url to faculty information
                     record["department"] = self.department
                     record["webpage_link"] = url
                     records.append(self._normalize(record))
@@ -164,7 +178,7 @@ class FacultyScraper(ABC):
 
     ###------------------------------------------------------------------------------------------------###
 
-    ### output contract
+    ### output consistency
 
     ###------------------------------------------------------------------------------------------------###
 
@@ -198,6 +212,8 @@ class FacultyScraper(ABC):
 
 ###------------------------------------------------------------------------------------------------###
     
+
+
     def clean_url(self, base: str, path: str) -> str:
         """Safely joins base URL and path"""
         return urljoin(base,path)
@@ -206,7 +222,7 @@ class FacultyScraper(ABC):
 
 ###------------------------------------------------------------------------------------------------###
 
-    ### Playwright Functions for browser scraping, utilizing async as well
+    ### Playwright Functions for browser scraping when requests fail, utilizing async as well
 
 ###------------------------------------------------------------------------------------------------###
     
@@ -235,14 +251,24 @@ class FacultyScraper(ABC):
         This is the playwright scraper which utilizes real browser and mimics real user bypassing cloudflare restrictions
         """
         
+        #gets or reuses a shared Chromium browser instance
         browser = await self._get_browser()
+
+        #opens a page/tab in the browser
         page = await browser.new_page()
 
+        #Goes to the target url and waits until the initial html is loaded and parsed
         await page.goto(url, wait_until="domcontentloaded", timeout = 60000)
+
+        #Some of the faculty pages (computer science) can't be used until a specific element appears
+        # if this is a faculty page, wait for the page tittle to confirm the real content has loaded
         if "/faculty/" in url:
             await page.wait_for_selector("h1.page_title", timeout=10000)
 
+        # pull the html from the rendered page
         html = await page.content()
+
+        #close the tab to free resources, the browser stays open
         await page.close()
 
         return html
@@ -253,10 +279,26 @@ class FacultyScraper(ABC):
 
 
     async def _get_browser(self):
+        """
+        initializes and returns a playwright browser instance
+
+        The browser is created once per scraper run and is reused across multiple pages to avoid 
+        the computational cost of reopening a new browser after each request
+        """
+
+        #if browser hasn't been cerated yet, launch it
         if self._browser is None:
             print("[playwright] launching browser")
+
+            #this starts the playwright engine
             self._playwright = await async_playwright().start()
+            
+            #launches chromium browser. headless= false means that the browser will pop up visibly in runs 
+            #which actually passes the cloudflare bot detection test like in the computer science faculty page
+            #If I do this on EC2, it could work without having an UI pop up on the screen
             self._browser = await self._playwright.chromium.launch(headless=False)
+
+        #returns the exiting browser instance
         return self._browser
     
 
@@ -264,10 +306,16 @@ class FacultyScraper(ABC):
 
 
     async def close(self):
+        """
+        shuts down playwright resources when finished
+
+        """
+        #close chromium if exists
         if self._browser:
             await self._browser.close()
             self._browser = None
 
+        #stop playwright engine if exists
         if self._playwright:    
             await self._playwright.stop()
             self._playwright = None
