@@ -1,6 +1,7 @@
 from scrapers.data_science_scraper import DataScienceScraper
 from scrapers.computer_science_scraper import ComputerScience_Scraper
 from scrapers.psychology_scraper import PsychologyScraper
+from scrapers.economics_scraper import EconomicsScraper
 from storage.duckdb_writer import DuckDBWriter
 from metrics.run_metrics import compute_run_stats
 from datetime import datetime
@@ -19,8 +20,8 @@ async def main():
     
 
     
-    # scraper = DataScienceScraper()
-    SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper()]
+    # SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper(), EconomicsScraper()]
+    SCRAPERS = [EconomicsScraper()]
   
 
 
