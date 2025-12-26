@@ -84,11 +84,22 @@ class PsychologyScraper(FacultyScraper):
         #this will add the focus to the expertise if exists
         focus = soup.find("div", class_="field-body")
         if focus:
+
+            #for research focus header
             focus_header = focus.find("h3", string="Research Focus")
             if focus_header:
                 focus_p = focus_header.find_next_sibling("p")
                 if focus_p:
                     expertise.append(focus_p.get_text(" ", strip=True))
+            
+            #for research interests header
+            interests_header = body.find("h3", string=lambda s: s and "Research Interests" in s)
+            if interests_header:
+                interests_p = interests_header.find_next_sibling("p")
+                if interests_p:
+                    expertise.append(interests_p.get_text(" ", strip=True))
+
+        expertise = expertise if expertise else None
 
         expertise = expertise if expertise else None
 
