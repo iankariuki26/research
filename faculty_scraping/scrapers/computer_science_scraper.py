@@ -45,7 +45,7 @@ class ComputerScience_Scraper(FacultyScraper):
     
     def parse_faculty_page(self, html, url):
         """
-        Extracts the normalized faculty data within a single data science faculty profile page
+        Extracts the normalized faculty data within a single computer science faculty profile page
 
         Args:
             html: the raw HTML of the faculty profile page
