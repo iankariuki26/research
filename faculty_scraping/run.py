@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 
+
 async def main():
 
     """
@@ -46,8 +47,14 @@ async def main():
     db = DuckDBWriter("faculty.duckdb")
     db.init_tables()
     
-    #SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper(), EconomicsScraper()]
-    SCRAPERS = [EconomicsScraper(run_id=run_id)]
+    SCRAPERS = [
+            DataScienceScraper(run_id=run_id), 
+            ComputerScience_Scraper(run_id=run_id),
+            PsychologyScraper(run_id=run_id),
+            EconomicsScraper(run_id=run_id)
+    ]
+
+    #SCRAPERS = [EconomicsScraper(run_id=run_id)]
   
 
     for scraper in SCRAPERS:
@@ -73,18 +80,18 @@ async def main():
             f"email={dept_metrics['email_pct']:.1%}"
         )
 
-        finished_at = datetime.now(eastern_timezone)
+    finished_at = datetime.now(eastern_timezone)
 
 
-        run_stats = compute_run_stats(
+    run_stats = compute_run_stats(
             run_id=run_id,
             started_at=started_at,
             finished_at=finished_at,
             scrapers=SCRAPERS,
         )
-        db.insert_scrape_run(run_stats)
-        logger.info(f"Finished scrape run {run_id}")
-        logger.info(f"Data Written to DuckDB")
+    db.insert_scrape_run(run_stats)
+    logger.info(f"Finished scrape run {run_id}")
+    logger.info(f"Data Written to DuckDB")
         
 
 
