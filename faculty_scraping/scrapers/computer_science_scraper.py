@@ -4,7 +4,7 @@ from .base import FacultyScraper
 import asyncio
 
 
-class ComputerScience_Scraper(FacultyScraper):
+class ComputerScienceScraper(FacultyScraper):
     """
     Scraper implementation for the University of Virginia
     Computer Science faculty directory.

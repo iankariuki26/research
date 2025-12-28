@@ -3,7 +3,7 @@ def compute_run_stats(run_id, started_at, finished_at, scrapers) -> dict:
     pages_fetched = sum(s.pages_fetched for s in scrapers)
     parse_failures = sum(s.parse_failures for s in scrapers)
     records_parsed = pages_fetched - parse_failures
-    emails_found = sum( s.email_count for s in scrapers if hasattr(s,"email_count"))
+    emails_found = sum(s.email_count for s in scrapers if hasattr(s,"email_count"))
 
     return {
         "run_id": run_id,                     #unique identifier that groups all data produced by the same run

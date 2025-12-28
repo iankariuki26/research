@@ -19,3 +19,5 @@ def compute_department_metrics(scraper, records, total_urls, run_id):
         "browser_fallbacks": browser_fallbacks,
         "browser_pct": browser_fallbacks / pages_fetched if pages_fetched else 0.0
     }
+
+    

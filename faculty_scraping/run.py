@@ -1,10 +1,3 @@
-#my department specific scrapers
-from scrapers.data_science_scraper import DataScienceScraper
-from scrapers.computer_science_scraper import ComputerScience_Scraper
-from scrapers.psychology_scraper import PsychologyScraper
-from scrapers.economics_scraper import EconomicsScraper
-import asyncio
-
 from storage.duckdb_writer import DuckDBWriter
 from metrics.run_metrics import compute_run_stats
 from metrics.department_metrics import compute_department_metrics
@@ -12,7 +5,37 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import logging
 import uuid
+import argparse
 
+
+#my department specific scrapers
+from scrapers.data_science_scraper import DataScienceScraper
+from scrapers.computer_science_scraper import ComputerScienceScraper
+from scrapers.psychology_scraper import PsychologyScraper
+from scrapers.economics_scraper import EconomicsScraper
+import asyncio
+
+DEPARTMENT_SCRAPERS = {
+    "data science": DataScienceScraper,
+    "computer science": ComputerScienceScraper,
+    "economics": EconomicsScraper,
+    "psychology": PsychologyScraper,
+}
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run the faculty scraping pipeline"
+    )
+
+    parser.add_argument(
+        "--departments",
+        nargs="+",
+        choices=DEPARTMENT_SCRAPERS.keys(),
+        required=True,
+        help="Departments to scrape"
+    )
+
+    return parser.parse_args()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +56,9 @@ async def main():
     """
     runs the end to end scrape job
     """
+
+    #for command line arguments
+    args=parse_args()
     
     eastern_timezone = ZoneInfo("America/New_York")
 
@@ -47,14 +73,14 @@ async def main():
     db = DuckDBWriter("faculty.duckdb")
     db.init_tables()
     
-    SCRAPERS = [
-            DataScienceScraper(run_id=run_id), 
-            ComputerScience_Scraper(run_id=run_id),
-            PsychologyScraper(run_id=run_id),
-            EconomicsScraper(run_id=run_id)
-    ]
+    # SCRAPERS = [
+    #         DataScienceScraper(run_id=run_id), 
+    #         ComputerScienceScraper(run_id=run_id),
+    #         PsychologyScraper(run_id=run_id),
+    #         EconomicsScraper(run_id=run_id)
+    # ]
 
-    #SCRAPERS = [EconomicsScraper(run_id=run_id)]
+    SCRAPERS = [DEPARTMENT_SCRAPERS[dept](run_id=run_id) for dept in args.departments]
   
 
     for scraper in SCRAPERS:
