@@ -4,6 +4,7 @@ import requests
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 import asyncio
+from zoneinfo import ZoneInfo
 
 
 
@@ -49,6 +50,10 @@ class FacultyScraper(ABC):
         self.pages_fetched = 0
         self.http_fetches = 0
         self.browser_fetched = 0
+
+        #concurrency
+        self.http_sem = asyncio.Semaphore(10) #allows for many http fetches
+        self.browser_sem = asyncio.Semaphore(2) #restricts playwright tabs
 
 
 
@@ -99,33 +104,61 @@ class FacultyScraper(ABC):
 
         """
         try:
-            #http request
-            r = self.session.get(url, timeout = 10)
-            #raises error if http response fails
-            r.raise_for_status()
+            async with self.http_sem:
+                #http request
+                r = self.session.get(url, timeout = 10)
+                #raises error if http response fails
+                r.raise_for_status()
 
-            #checks to see if cloudflare blocks scraping through bot test
-            if self._is_cloudflare_block(r.text):
-                raise RuntimeError("Cloudflare challenge detected")
+                #checks to see if cloudflare blocks scraping through bot test
+                if self._is_cloudflare_block(r.text):
+                    raise RuntimeError("Cloudflare challenge detected")
 
-            #if scrape successful
-            self.http_fetches += 1
-            self.pages_fetched += 1
+                #if scrape successful
+                self.http_fetches += 1
+                self.pages_fetched += 1
 
-            #returns the raw html and our fetch method, http since successful
-            return r.text, "http"
+                #returns the raw html and our fetch method, http since successful
+                return r.text, "http"
         
 
         except (requests.HTTPError, requests.Timeout, RuntimeError) as e:
-            print(f"[fetch_page] falling back to browser scrape through playwright for {url} ({e})")
+            print(f"[fetch_page] falling back to browser scrape through playwright for {url} becuase of -> ({e})")
 
-            #using real browser to load page and get the html
-            html = await self._playwright_page_scraper(url)
+            async with self.browser_sem:
+                #using real browser to load page and get the html
+                html = await self._playwright_page_scraper(url)
+
             self.pages_fetched += 1
             self.browser_fetched += 1
             return html, "browser"
-    
 
+
+
+
+
+    async def _scrape_one(self, url: str):
+        try:
+            html, fetch_method = await self.fetch_page(url)
+
+            raw_page = {
+                "department": self.department,
+                "url": url,
+                "html": html,
+                "fetch_method": fetch_method,
+                "scraped_at": datetime.now(ZoneInfo("America/New_York")),
+            }
+
+            record = self.parse_faculty_page(html, url)
+            record["department"] = self.department
+            record["webpage_link"] = url
+
+            return raw_page, self._normalize(record)
+
+        except Exception as e:
+            self.parse_failures += 1
+            print(f"[{self.department}] parse failure on {url}: {e}")
+            return None, None
 
 
 
@@ -137,41 +170,35 @@ class FacultyScraper(ABC):
             raw_pages: lossless HTML Captures for reproducibility 
             records: normalized faculty records 
         """
+
         try:
+
+            urls = await self.get_faculty_links()
+
+            tasks = [self._scrape_one(url) for url in urls]
+            results = await asyncio.gather(*tasks)
+
+
+
             raw_pages = []
             records = []
 
-            #goes through every faculty link for a department
-            for url in await self.get_faculty_links():
-                try:
-                    html, fetch_method = await self.fetch_page(url)
+            for raw, record in results:
+                if raw:
+                    raw_pages.append(raw)  
+                if record:
+                    records.append(record)   
 
-                    #this is the raw capture which will be appended to
-                    raw_pages.append({
-                        "department" : self.department,
-                        "url" : url,
-                        "html" : html,
-                        "fetch_method": fetch_method,
-                        "scraped_at" : datetime.now(timezone.utc)
-                    })
-
-                    #this is the normalized extraction with most of the faculty information
-                    record = self.parse_faculty_page(html, url)
-
-                    #adding department and url to faculty information
-                    record["department"] = self.department
-                    record["webpage_link"] = url
-                    records.append(self._normalize(record))
-
-                
-                except Exception as e:
-                    self.parse_failures += 1
-                    print(f"[{self.department}] parse failure on {url}: {e}")
+            return raw_pages, records       
 
         finally:
             await self.close()
 
-        return raw_pages, records
+
+
+
+
+
 
 
 
@@ -292,6 +319,9 @@ class FacultyScraper(ABC):
 
             #this starts the playwright engine
             self._playwright = await async_playwright().start()
+
+
+            print("Launching Browser)")
             
             #launches chromium browser. headless= false means that the browser will pop up visibly in runs 
             #which actually passes the cloudflare bot detection test like in the computer science faculty page
