@@ -30,5 +30,15 @@ Design and implement a scalable web scraping pipeline that collects and stores s
 The pipeline will begin with faculty in UVA's School of Data Science and is designed to expand to additional departments as the project scales. Raw HTML snapshots are preserved to ensure reproducibility and track potential changes to already recorded data.
 
 
+## TO RUN:
+
+Download dependencies within requirements.txt
+
+Within scrapers folder run
+
+    python run.py --departments "department name"
+
+    ex. python run.py --departments "data science" "economics" "psychology"
+
 
      

@@ -30,4 +30,4 @@ To implement the Psychology and Economics Scrapers, add some comments to base cl
 
 `Next Steps:`
 
-Reach out via email to Dr.Alex Gates to check in, figure out duplicate professor instances when appearance in multiple departments, think about other departments, think about moving to aws ec2, figure out a more robust storage system, add metrics that give the for every department metric occurrence  to count ratio  -> ex.(data science faculty with bios -> 50/51)
+Reach out via email to Dr.Alex Gates to check in, figure out duplicate professor instances when appearance in multiple departments, think about other departments, think about moving to aws ec2, figure out a more robust storage system, add metrics that give the for every department metric occurrence to count ratio  -> ex.(data science faculty with bios -> 50/51)
