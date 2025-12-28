@@ -1,12 +1,30 @@
+#my department specific scrapers
 from scrapers.data_science_scraper import DataScienceScraper
 from scrapers.computer_science_scraper import ComputerScience_Scraper
 from scrapers.psychology_scraper import PsychologyScraper
 from scrapers.economics_scraper import EconomicsScraper
+import asyncio
+
 from storage.duckdb_writer import DuckDBWriter
 from metrics.run_metrics import compute_run_stats
+from metrics.department_metrics import compute_department_metrics
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import asyncio
+import logging
+import uuid
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(), #for showing logs in terminal
+        logging.FileHandler("../logs/scrape.log"), #puts logs in scrape.log file
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
 
 
 async def main():
@@ -16,35 +34,59 @@ async def main():
     """
     
     eastern_timezone = ZoneInfo("America/New_York")
+
+    #unique identifier that groups all data produced by the same run
+    run_id = str(uuid.uuid4())
+
     started_at = datetime.now(eastern_timezone)
-    
+
+    logger.info(f"Starting scrape run {run_id}")
 
     
-    # SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper(), EconomicsScraper()]
-    SCRAPERS = [EconomicsScraper()]
+    db = DuckDBWriter("faculty.duckdb")
+    db.init_tables()
+    
+    #SCRAPERS = [DataScienceScraper(), ComputerScience_Scraper(), PsychologyScraper(), EconomicsScraper()]
+    SCRAPERS = [EconomicsScraper(run_id=run_id)]
   
 
+    for scraper in SCRAPERS:
+        urls = await scraper.get_faculty_links()
+        raw_pages, records = await scraper.scrape()
 
-    for i in SCRAPERS:
-
-        raw_pages, records = await i.scrape()
-
-        print(f"Scraped {len(records)} records")
-        print(f"Pages Fetched: {i.pages_fetched}")
-        print(f"Parse failures: {i.parse_failures}")
-
-        db = DuckDBWriter("faculty.duckdb")
-        db.init_tables()
+    
         db.insert_raw_pages(raw_pages)
         db.insert_records(records)
 
-        stats = compute_run_stats(i,records, started_at)
-        db.insert_scrape_run(stats)
+        dept_metrics = compute_department_metrics(
+            scraper=scraper,
+            records=records,
+            total_urls=len(urls),
+            run_id=run_id,
+        )
+
+        db.insert_department_metrics(dept_metrics)
+
+        logger.info(
+            f"[{scraper.department}] "
+            f"fail={dept_metrics['failed_pct']:.1%}, "
+            f"email={dept_metrics['email_pct']:.1%}"
+        )
+
+        finished_at = datetime.now(eastern_timezone)
+
+
+        run_stats = compute_run_stats(
+            run_id=run_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            scrapers=SCRAPERS,
+        )
+        db.insert_scrape_run(run_stats)
+        logger.info(f"Finished scrape run {run_id}")
+        logger.info(f"Data Written to DuckDB")
         
-        print("Data written to DuckDB")
-        print(f"stats of {i}")
-        print(stats)
-        
+
 
 
 if __name__ == "__main__":

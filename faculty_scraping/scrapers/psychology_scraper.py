@@ -13,8 +13,11 @@ class PsychologyScraper(FacultyScraper):
     2. Parsing individual faculty profile pages
     """
 
-
-    department = "Psychology"
+    def __init__(self, run_id: str):
+        super().__init__(run_id)
+        self.department = "Psychology"
+    
+    # department = "Psychology"
 
     #directory page url with all the faculty pages
     DIRECTORY_URL = "https://psychology.as.virginia.edu/faculty"

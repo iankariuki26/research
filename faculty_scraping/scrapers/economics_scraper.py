@@ -15,7 +15,11 @@ class EconomicsScraper(FacultyScraper):
     """
 
 
-    department = "Economics"
+    def __init__(self, run_id: str):
+        super().__init__(run_id)
+        self.department = "Economics"
+
+    # department = "Economics"
 
     #directory page url with all the faculty pages
     DIRECTORY_URL = "https://economics.virginia.edu/faculty"

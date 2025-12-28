@@ -5,7 +5,9 @@ from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 import asyncio
 from zoneinfo import ZoneInfo
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 class FacultyScraper(ABC):
@@ -30,7 +32,7 @@ class FacultyScraper(ABC):
 
 
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, run_id: str, *args, **kwargs):
         #only uses a single consistent HTTP session instead of a new one for every page
         #mimics real user to prevent scraping blocking risk
         self.session = requests.Session()
@@ -41,6 +43,8 @@ class FacultyScraper(ABC):
                 "Chrome/120.0.0.0 Safari/537.36"
             )
         })
+        self.run_id = run_id
+
 
         self._playwright = None
         self._browser = None
@@ -53,7 +57,12 @@ class FacultyScraper(ABC):
 
         #concurrency
         self.http_sem = asyncio.Semaphore(10) #allows for many http fetches
-        self.browser_sem = asyncio.Semaphore(2) #restricts playwright tabs
+        self.browser_sem = asyncio.Semaphore(3) #restricts playwright tabs
+
+        logger.info(f"Initialized {self.__class__.__name__} | "
+                    f"http_concurrency={self.http_sem._value} | "
+                    f"browser_concurrency={self.browser_sem._value}"            
+        )
 
 
 
@@ -123,7 +132,15 @@ class FacultyScraper(ABC):
         
 
         except (requests.HTTPError, requests.Timeout, RuntimeError) as e:
-            print(f"[fetch_page] falling back to browser scrape through playwright for {url} becuase of -> ({e})")
+            print(f"[fetch_page] falling back to browser scrape through playwright for {url} because of -> ({e})")
+            logger.warning(
+                "Falling back to Playwright",
+                extra={
+                    "department": self.department,
+                    "url": url,
+                    "reason": str(e),
+                },
+            )
 
             async with self.browser_sem:
                 #using real browser to load page and get the html
@@ -138,10 +155,16 @@ class FacultyScraper(ABC):
 
 
     async def _scrape_one(self, url: str):
+        """
+        Scrapes a single faculty profile page
+
+        Returns snapshot of html page with some metadata, and returns and normalized faculty data
+        """
         try:
             html, fetch_method = await self.fetch_page(url)
 
             raw_page = {
+                "run_id" : self.run_id,
                 "department": self.department,
                 "url": url,
                 "html": html,
@@ -149,6 +172,7 @@ class FacultyScraper(ABC):
                 "scraped_at": datetime.now(ZoneInfo("America/New_York")),
             }
 
+            #parse_faculty page is defined uniquely for each department, gets metadata from single faculty page
             record = self.parse_faculty_page(html, url)
             record["department"] = self.department
             record["webpage_link"] = url
@@ -158,24 +182,40 @@ class FacultyScraper(ABC):
         except Exception as e:
             self.parse_failures += 1
             print(f"[{self.department}] parse failure on {url}: {e}")
+            logger.error(
+                f"[{self.department}] Parse failure",
+                extra={"url":url, "error": str(e)},
+            )
             return None, None
 
 
 
 
     async def scrape(self) -> tuple[list[dict], list[dict]]:
-        """This executes the scraping workflow
+        """This executes the full scraping workflow for a department
+
+
+            Discovers all faculty profile URLs
+            Scrapes all pages concurrently
+            Collects both raw HTML captures and normalized faculty records
         
         Returns :
             raw_pages: lossless HTML Captures for reproducibility 
             records: normalized faculty records 
         """
 
-        try:
+        logger.info(f"[{self.department}] Starting scrape")
 
+        try:
+            
+            #obtains all faculty profile urls from directory page
             urls = await self.get_faculty_links()
 
+            #creates one scraping task per URL, the tasks run concurrently and are rate-limited
+            #by semaphore in fetch_page()
             tasks = [self._scrape_one(url) for url in urls]
+
+            #executes all scraping tasks concurrently and wait for completion
             results = await asyncio.gather(*tasks)
 
 
@@ -183,6 +223,9 @@ class FacultyScraper(ABC):
             raw_pages = []
             records = []
 
+
+            #Appends raw html files and records to respective lists
+            #failed scraped are skipped and returned as None
             for raw, record in results:
                 if raw:
                     raw_pages.append(raw)  
@@ -194,8 +237,13 @@ class FacultyScraper(ABC):
         finally:
             await self.close()
 
-
-
+            logger.info(
+            f"[{self.department}] Finished scrape | "
+            f"pages={self.pages_fetched} "
+            f"http={self.http_fetches} "
+            f"browser={self.browser_fetched} "
+            f"parse_failures={self.parse_failures}"
+)
 
 
 
@@ -284,6 +332,7 @@ class FacultyScraper(ABC):
         #opens a page/tab in the browser
         page = await browser.new_page()
 
+
         #Goes to the target url and waits until the initial html is loaded and parsed
         await page.goto(url, wait_until="domcontentloaded", timeout = 60000)
 
@@ -297,6 +346,7 @@ class FacultyScraper(ABC):
 
         #close the tab to free resources, the browser stays open
         await page.close()
+
 
         return html
     
@@ -315,13 +365,12 @@ class FacultyScraper(ABC):
 
         #if browser hasn't been cerated yet, launch it
         if self._browser is None:
-            print("[playwright] launching browser")
+            logger.info("[playwright] Launching browser")
 
             #this starts the playwright engine
             self._playwright = await async_playwright().start()
 
 
-            print("Launching Browser)")
             
             #launches chromium browser. headless= false means that the browser will pop up visibly in runs 
             #which actually passes the cloudflare bot detection test like in the computer science faculty page
@@ -349,6 +398,8 @@ class FacultyScraper(ABC):
         if self._playwright:    
             await self._playwright.stop()
             self._playwright = None
+
+        logger.info(f"[{self.department}] shutting down Playwright resources")
 
         
         

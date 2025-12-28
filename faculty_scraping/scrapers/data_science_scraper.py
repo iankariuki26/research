@@ -13,8 +13,14 @@ class DataScienceScraper(FacultyScraper):
     2. Parsing individual faculty profile pages
     """
 
+    def __init__(self, run_id: str):
+        super().__init__(run_id)
+        self.department = "Data Science"
+        
 
-    department = "Data Science"
+
+
+    # department = "Data Science"
 
 
     #this is the base domain for all Data Science pages

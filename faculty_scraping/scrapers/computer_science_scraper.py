@@ -13,8 +13,12 @@ class ComputerScience_Scraper(FacultyScraper):
     1. Discovering faculty profile URLs
     2. Parsing individual faculty profile pages
     """
+
+    def __init__(self, run_id: str):
+        super().__init__(run_id)
+        self.department = "Computer Science"
     
-    department = "Computer Science"
+    # department = "Computer Science"
 
     #all faculty under one_url, this also includes Emeritus Faculty
     DIRECTORY_URL = "https://engineering.virginia.edu/department/computer-science/faculty"
